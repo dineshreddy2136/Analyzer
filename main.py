@@ -5,6 +5,7 @@ import sys
 import argparse
 from pathlib import Path
 
+# --- GraphEnhancer Class and Helper Functions remain the same ---
 class GraphEnhancer:
     def __init__(self, graph_path):
         self.graph_path = Path(graph_path)
@@ -121,18 +122,33 @@ def get_backward_trace(graph: dict, target_function: str) -> list:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a dependency trace for a function.")
-    parser.add_argument("target_function", help="The full name of the function to analyze (e.g., module.ClassName.method_name)")
-    parser.add_argument("--dot", help="Optional: Specify a filename to save a visual graph (e.g., my_graph.dot)")
     
-    # --- NEW: Added --o flag for overview ---
-    parser.add_argument("--o", "--overview", action="store_true", help="Generate a DOT file of the entire project graph, overriding other flags for the DOT output.")
+    # --- MODIFIED: target_function is now optional ---
+    parser.add_argument("target_function", nargs='?', help="Optional: The full name of the function to analyze (e.g., module.ClassName.method_name)")
+    parser.add_argument("--dot", help="Optional: Specify a filename to save a visual graph (e.g., my_graph.dot)")
+    parser.add_argument("--o", "--overview", action="store_true", help="Generate a DOT file of the entire project graph.")
     
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--f", "--forward", action="store_true", help="Show forward dependency tracking only.")
     group.add_argument("--b", "--backward", action="store_true", help="Show backward dependency tracking only.")
     group.add_argument("--full", action="store_true", help="Show both forward and backward tracking (default).")
+    
     args = parser.parse_args()
     
+    # --- NEW LOGIC: Validate that a function is provided if --o is not used ---
+    if not args.target_function and not args.o:
+        parser.error("A target_function is required unless you are using the --o flag to generate a full project overview.")
+
+    # --- NEW LOGIC: If only --o and --dot are provided, just generate the graph and exit ---
+    if args.o and not args.target_function:
+        if not args.dot:
+            parser.error("The --o flag requires the --dot <filename> flag to be useful when no target_function is specified.")
+        enhancer = GraphEnhancer("src/.nuanced/nuanced-graph.json")
+        enhanced_graph = enhancer.enhance()
+        save_as_dot_file(enhanced_graph, args.dot)
+        sys.exit(0) # Exit successfully
+
+    # --- The rest of the script runs if a target_function is provided ---
     is_forward_only = args.f
     is_backward_only = args.b
     is_full_report = args.full or not (is_forward_only or is_backward_only)
@@ -142,7 +158,6 @@ if __name__ == "__main__":
     
     if args.dot:
         graph_for_dot = {}
-        # --- NEW LOGIC: Prioritize the --o flag for the DOT file ---
         if args.o:
             graph_for_dot = enhanced_graph
         elif is_forward_only:
@@ -160,10 +175,8 @@ if __name__ == "__main__":
                     graph_for_dot[caller] = {"callees": []}
                 if args.target_function not in graph_for_dot[caller]["callees"]:
                     graph_for_dot[caller]["callees"].append(args.target_function)
-        
         save_as_dot_file(graph_for_dot, args.dot)
 
-    # JSON Report generation is unaffected by the --o flag
     final_report = {"function": args.target_function, "filepath": enhanced_graph.get(args.target_function, {}).get("filepath")}
     if is_forward_only or is_full_report:
         final_report["forward_dependency_tree"] = get_deep_forward_trace(enhanced_graph, args.target_function)
