@@ -3,9 +3,20 @@ import json
 import ast
 import sys
 import argparse
+import textwrap
 from pathlib import Path
+import colorsys
+import hashlib
 
-# --- GraphEnhancer Class and Helper Functions remain the same ---
+# --- Configuration for Visualization ---
+MODULE_COLOR_MAP = {
+    "api": "#d4e1f5",       # Light Blue
+    "database": "#d5f5e3",  # Light Green
+    "models": "#fff2cc",    # Light Yellow
+    "utils": "#f5e1d4",     # Light Orange
+}
+
+# --- GraphEnhancer Class and other helpers remain the same ---
 class GraphEnhancer:
     def __init__(self, graph_path):
         self.graph_path = Path(graph_path)
@@ -31,7 +42,8 @@ class GraphEnhancer:
                         module_name = node.module.lstrip('.') if node.level > 0 else node.module
                         for alias in node.names:
                             import_map[alias.name] = module_name
-                self.file_cache[filepath] = {"tree": tree, "imports": import_map}
+                # Store the source code lines in the cache
+                self.file_cache[filepath] = {"tree": tree, "imports": import_map, "source_lines": source_code.splitlines()}
             except Exception as e:
                 print(f"Warning: Could not parse {filepath}. Error: {e}", file=sys.stderr)
                 self.file_cache[filepath] = None
@@ -83,15 +95,61 @@ class GraphEnhancer:
                             data["callees"].append(callee)
         return self.graph
 
-def save_as_dot_file(graph: dict, output_path: str):
-    print(f"Generating DOT file...", file=sys.stderr)
-    dot_lines = ['digraph CallGraph {', '  rankdir="LR";', '  node [shape=box, style=rounded, fontname="Helvetica"];', '  edge [fontname="Helvetica"];']
+def get_color_for_module(module_name):
+    if module_name in MODULE_COLOR_MAP:
+        return MODULE_COLOR_MAP[module_name]
+    hash_val = int(hashlib.md5(module_name.encode()).hexdigest(), 16)
+    hue = (hash_val % 360) / 360.0
+    rgb = colorsys.hls_to_rgb(hue, 0.9, 0.8)
+    return '#%02x%02x%02x' % (int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+
+# --- MODIFIED: The code preview logic is now more precise ---
+def get_code_preview(filepath, start_line, end_line, file_cache, max_lines=20):
+    try:
+        source_lines = file_cache[filepath]['source_lines']
+        
+        # --- NEW LOGIC: Only grab lines within the function's bounds ---
+        function_lines = source_lines[start_line - 1 : end_line]
+        total_lines = len(function_lines)
+        
+        # --- NEW LOGIC: Decide if truncation is necessary ---
+        if total_lines > max_lines:
+            preview_lines = function_lines[:max_lines]
+            remaining_lines = total_lines - max_lines
+            suffix = f"\\l... ({remaining_lines} more lines)\\l"
+        else:
+            preview_lines = function_lines
+            suffix = "\\l" # Add a final line break for padding
+
+        # Dedent, escape for DOT, and format
+        preview_text = textwrap.dedent("\n".join(preview_lines))
+        escaped_text = preview_text.replace('"', '\\"').replace("\n", "\\l")
+        
+        return escaped_text + suffix
+    except Exception:
+        return "Could not load code preview."
+
+# --- The rest of the script is unchanged ---
+def save_as_dot_file(graph: dict, full_graph: dict, file_cache: dict, output_path: str):
+    print(f"Generating DOT file with previews...", file=sys.stderr)
+    dot_lines = ['digraph CallGraph {', '  rankdir="LR";', '  node [shape=box, style="rounded,filled", fontname="Helvetica"];', '  edge [fontname="Helvetica"];']
+    all_nodes_in_subgraph = set(graph.keys()) | {callee for data in graph.values() for callee in data.get("callees", [])}
+    for node_name in all_nodes_in_subgraph:
+        node_data = full_graph.get(node_name)
+        attributes = {}
+        module_name = node_name.split('.')[1] if node_name.startswith('src.') else node_name.split('.')[0]
+        attributes['fillcolor'] = f'"{get_color_for_module(module_name)}"'
+        if node_data:
+            filepath = node_data.get("filepath", "")
+            start_line = node_data.get("lineno", 0)
+            end_line = node_data.get("end_lineno", 0)
+            tooltip = get_code_preview(filepath, start_line, end_line, file_cache)
+            attributes['tooltip'] = f'"{tooltip}"'
+        attr_string = ", ".join([f'{k}={v}' for k, v in attributes.items()])
+        dot_lines.append(f'  "{node_name}" [{attr_string}];')
     for caller, data in graph.items():
-        if not data.get("callees"): continue
-        sanitized_caller = f'"{caller}"'
         for callee in data.get("callees", []):
-            sanitized_callee = f'"{callee}"'
-            dot_lines.append(f"  {sanitized_caller} -> {sanitized_callee};")
+            dot_lines.append(f'  "{caller}" -> "{callee}";')
     dot_lines.append('}')
     Path(output_path).write_text("\n".join(dot_lines))
     print(f"✅ DOT file saved to {output_path}", file=sys.stderr)
@@ -122,61 +180,46 @@ def get_backward_trace(graph: dict, target_function: str) -> list:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a dependency trace for a function.")
-    
-    # --- MODIFIED: target_function is now optional ---
     parser.add_argument("target_function", nargs='?', help="Optional: The full name of the function to analyze (e.g., module.ClassName.method_name)")
     parser.add_argument("--dot", help="Optional: Specify a filename to save a visual graph (e.g., my_graph.dot)")
     parser.add_argument("--o", "--overview", action="store_true", help="Generate a DOT file of the entire project graph.")
-    
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--f", "--forward", action="store_true", help="Show forward dependency tracking only.")
     group.add_argument("--b", "--backward", action="store_true", help="Show backward dependency tracking only.")
     group.add_argument("--full", action="store_true", help="Show both forward and backward tracking (default).")
-    
     args = parser.parse_args()
-    
-    # --- NEW LOGIC: Validate that a function is provided if --o is not used ---
     if not args.target_function and not args.o:
         parser.error("A target_function is required unless you are using the --o flag to generate a full project overview.")
-
-    # --- NEW LOGIC: If only --o and --dot are provided, just generate the graph and exit ---
+    enhancer = GraphEnhancer("src/.nuanced/nuanced-graph.json")
+    enhanced_graph = enhancer.enhance()
     if args.o and not args.target_function:
         if not args.dot:
             parser.error("The --o flag requires the --dot <filename> flag to be useful when no target_function is specified.")
-        enhancer = GraphEnhancer("src/.nuanced/nuanced-graph.json")
-        enhanced_graph = enhancer.enhance()
-        save_as_dot_file(enhanced_graph, args.dot)
-        sys.exit(0) # Exit successfully
-
-    # --- The rest of the script runs if a target_function is provided ---
+        save_as_dot_file(enhanced_graph, enhanced_graph, enhancer.file_cache, args.dot)
+        sys.exit(0)
     is_forward_only = args.f
     is_backward_only = args.b
     is_full_report = args.full or not (is_forward_only or is_backward_only)
-    
-    enhancer = GraphEnhancer("src/.nuanced/nuanced-graph.json")
-    enhanced_graph = enhancer.enhance()
-    
     if args.dot:
-        graph_for_dot = {}
+        graph_for_dot_viz = {}
         if args.o:
-            graph_for_dot = enhanced_graph
+            graph_for_dot_viz = enhanced_graph
         elif is_forward_only:
             forward_tree = get_deep_forward_trace(enhanced_graph, args.target_function)
-            graph_for_dot = {func: {"callees": callees} for func, callees in forward_tree.items()}
+            graph_for_dot_viz = {func: {"callees": callees} for func, callees in forward_tree.items()}
         elif is_backward_only:
             callers = get_backward_trace(enhanced_graph, args.target_function)
-            graph_for_dot = {caller: {"callees": [args.target_function]} for caller in callers}
-        else: # is_full_report or default
+            graph_for_dot_viz = {caller: {"callees": [args.target_function]} for caller in callers}
+        else:
             forward_tree = get_deep_forward_trace(enhanced_graph, args.target_function)
             callers = get_backward_trace(enhanced_graph, args.target_function)
-            graph_for_dot = {func: {"callees": callees} for func, callees in forward_tree.items()}
+            graph_for_dot_viz = {func: {"callees": callees} for func, callees in forward_tree.items()}
             for caller in callers:
-                if caller not in graph_for_dot:
-                    graph_for_dot[caller] = {"callees": []}
-                if args.target_function not in graph_for_dot[caller]["callees"]:
-                    graph_for_dot[caller]["callees"].append(args.target_function)
-        save_as_dot_file(graph_for_dot, args.dot)
-
+                if caller not in graph_for_dot_viz:
+                    graph_for_dot_viz[caller] = {"callees": []}
+                if args.target_function not in graph_for_dot_viz[caller]["callees"]:
+                    graph_for_dot_viz[caller]["callees"].append(args.target_function)
+        save_as_dot_file(graph_for_dot_viz, enhanced_graph, enhancer.file_cache, args.dot)
     final_report = {"function": args.target_function, "filepath": enhanced_graph.get(args.target_function, {}).get("filepath")}
     if is_forward_only or is_full_report:
         final_report["forward_dependency_tree"] = get_deep_forward_trace(enhanced_graph, args.target_function)
