@@ -13,11 +13,8 @@ class GraphEnhancer:
             sys.exit(1)
         self.graph = json.loads(self.graph_path.read_text())
         self.file_cache = {}
-        
-        # --- NEW: Auto-detect the root package (e.g., 'src') ---
         self.root_package = ""
         if self.graph:
-            # Infer the root package from the first key in the graph
             first_key = next(iter(self.graph))
             if '.' in first_key:
                 self.root_package = first_key.split('.')[0]
@@ -53,12 +50,9 @@ class GraphEnhancer:
                 if param_name in self.params:
                     method_name = node.func.attr
                     param_type_name = self.params[param_name]
-                    
                     module_name = self.import_map.get(param_type_name)
                     if not module_name:
                         module_name = self.current_module_name
-                    
-                    # --- NEW CORRECTED LOGIC: Prepend the root package ---
                     full_callee_name = f"{self.root_package}.{module_name}.{param_type_name}.{method_name}"
                     self.found_callees.append(full_callee_name)
             self.generic_visit(node)
@@ -67,11 +61,9 @@ class GraphEnhancer:
         for function_name, data in self.graph.items():
             filepath = data.get("filepath")
             if not filepath: continue
-            
             file_details = self.get_file_details(filepath)
             if not file_details: continue
             tree, import_map = file_details["tree"], file_details["imports"]
-
             current_module_name = Path(filepath).stem
             target_func_name = function_name.split('.')[-1]
             node_to_visit = None
@@ -79,21 +71,17 @@ class GraphEnhancer:
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == target_func_name:
                     node_to_visit = node
                     break
-            
             if node_to_visit:
                 params_with_types = {arg.arg: ast.unparse(arg.annotation).strip() for arg in node_to_visit.args.args if arg.annotation}
                 if not params_with_types: continue
-                
                 visitor = self.MethodCallVisitor(params_with_types, import_map, current_module_name, self.root_package)
                 visitor.visit(node_to_visit)
-
                 if visitor.found_callees:
                     for callee in visitor.found_callees:
                         if callee not in data["callees"]:
                             data["callees"].append(callee)
         return self.graph
 
-# --- The rest of the script is unchanged ---
 def save_as_dot_file(graph: dict, output_path: str):
     print(f"Generating DOT file...", file=sys.stderr)
     dot_lines = ['digraph CallGraph {', '  rankdir="LR";', '  node [shape=box, style=rounded, fontname="Helvetica"];', '  edge [fontname="Helvetica"];']
@@ -135,25 +123,47 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a dependency trace for a function.")
     parser.add_argument("target_function", help="The full name of the function to analyze (e.g., module.ClassName.method_name)")
     parser.add_argument("--dot", help="Optional: Specify a filename to save a visual graph (e.g., my_graph.dot)")
+    
+    # --- NEW: Added --o flag for overview ---
+    parser.add_argument("--o", "--overview", action="store_true", help="Generate a DOT file of the entire project graph, overriding other flags for the DOT output.")
+    
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--f", "--forward", action="store_true", help="Show forward dependency tracking only.")
     group.add_argument("--b", "--backward", action="store_true", help="Show backward dependency tracking only.")
     group.add_argument("--full", action="store_true", help="Show both forward and backward tracking (default).")
     args = parser.parse_args()
+    
     is_forward_only = args.f
     is_backward_only = args.b
     is_full_report = args.full or not (is_forward_only or is_backward_only)
+    
     enhancer = GraphEnhancer("src/.nuanced/nuanced-graph.json")
     enhanced_graph = enhancer.enhance()
+    
     if args.dot:
-        graph_for_dot = enhanced_graph
-        if is_forward_only:
+        graph_for_dot = {}
+        # --- NEW LOGIC: Prioritize the --o flag for the DOT file ---
+        if args.o:
+            graph_for_dot = enhanced_graph
+        elif is_forward_only:
             forward_tree = get_deep_forward_trace(enhanced_graph, args.target_function)
             graph_for_dot = {func: {"callees": callees} for func, callees in forward_tree.items()}
         elif is_backward_only:
             callers = get_backward_trace(enhanced_graph, args.target_function)
             graph_for_dot = {caller: {"callees": [args.target_function]} for caller in callers}
+        else: # is_full_report or default
+            forward_tree = get_deep_forward_trace(enhanced_graph, args.target_function)
+            callers = get_backward_trace(enhanced_graph, args.target_function)
+            graph_for_dot = {func: {"callees": callees} for func, callees in forward_tree.items()}
+            for caller in callers:
+                if caller not in graph_for_dot:
+                    graph_for_dot[caller] = {"callees": []}
+                if args.target_function not in graph_for_dot[caller]["callees"]:
+                    graph_for_dot[caller]["callees"].append(args.target_function)
+        
         save_as_dot_file(graph_for_dot, args.dot)
+
+    # JSON Report generation is unaffected by the --o flag
     final_report = {"function": args.target_function, "filepath": enhanced_graph.get(args.target_function, {}).get("filepath")}
     if is_forward_only or is_full_report:
         final_report["forward_dependency_tree"] = get_deep_forward_trace(enhanced_graph, args.target_function)
