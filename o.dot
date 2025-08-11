@@ -1,0 +1,9 @@
+digraph CallGraph {
+  rankdir="LR";
+  node [shape=box, style=rounded, fontname="Helvetica"];
+  edge [fontname="Helvetica"];
+  "src.utils.cleanup_application_resources" -> "<builtin>.str";
+  "src.utils.cleanup_application_resources" -> "src.ConnectionPool.cleanup_stale_connections";
+  "src.utils.cleanup_application_resources" -> "src.CacheManager.cleanup_expired";
+  "src.utils.cleanup_application_resources" -> "src.MetricsCollector.get_summary";
+}
