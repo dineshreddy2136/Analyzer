@@ -1,13 +1,10 @@
-# generate_full_context.py
+# main.py
 import json
 import ast
 import sys
 import argparse
 from pathlib import Path
 
-# ==============================================================================
-# PART 1: The Upgraded Graph Enhancer Logic
-# ==============================================================================
 class GraphEnhancer:
     def __init__(self, graph_path):
         self.graph_path = Path(graph_path)
@@ -16,30 +13,26 @@ class GraphEnhancer:
             sys.exit(1)
         self.graph = json.loads(self.graph_path.read_text())
         self.file_cache = {}
+        
+        # --- NEW: Auto-detect the root package (e.g., 'src') ---
+        self.root_package = ""
+        if self.graph:
+            # Infer the root package from the first key in the graph
+            first_key = next(iter(self.graph))
+            if '.' in first_key:
+                self.root_package = first_key.split('.')[0]
 
     def get_file_details(self, filepath):
-        """Reads, parses, and analyzes imports for a file, using a cache."""
         if filepath not in self.file_cache:
             try:
                 source_code = Path(filepath).read_text()
                 tree = ast.parse(source_code)
-                
-                # --- NEW: Analyze imports ---
                 import_map = {}
                 for node in ast.walk(tree):
-                    if isinstance(node, ast.ImportFrom):
-                        module_name = node.module
-                        # Handle relative imports like `from .database import ...`
-                        if module_name.startswith('.'):
-                            # This is a simplified resolver for relative imports
-                            # It assumes '.' refers to the same directory level
-                            base_module = Path(filepath).stem
-                            # This logic is still simplified, a full resolver is complex
-                            module_name = module_name.lstrip('.')
-                        
+                    if isinstance(node, ast.ImportFrom) and node.module:
+                        module_name = node.module.lstrip('.') if node.level > 0 else node.module
                         for alias in node.names:
                             import_map[alias.name] = module_name
-
                 self.file_cache[filepath] = {"tree": tree, "imports": import_map}
             except Exception as e:
                 print(f"Warning: Could not parse {filepath}. Error: {e}", file=sys.stderr)
@@ -47,9 +40,11 @@ class GraphEnhancer:
         return self.file_cache[filepath]
 
     class MethodCallVisitor(ast.NodeVisitor):
-        def __init__(self, params_with_types, import_map):
+        def __init__(self, params_with_types, import_map, current_module_name, root_package):
             self.params = params_with_types
             self.import_map = import_map
+            self.current_module_name = current_module_name
+            self.root_package = root_package
             self.found_callees = []
 
         def visit_Call(self, node):
@@ -59,12 +54,13 @@ class GraphEnhancer:
                     method_name = node.func.attr
                     param_type_name = self.params[param_name]
                     
-                    # --- NEW: Use the import map to find the correct module ---
-                    module_name = self.import_map.get(param_type_name, None)
-                    if module_name:
-                        full_callee_name = f"{module_name}.{param_type_name}.{method_name}"
-                        self.found_callees.append(full_callee_name)
-
+                    module_name = self.import_map.get(param_type_name)
+                    if not module_name:
+                        module_name = self.current_module_name
+                    
+                    # --- NEW CORRECTED LOGIC: Prepend the root package ---
+                    full_callee_name = f"{self.root_package}.{module_name}.{param_type_name}.{method_name}"
+                    self.found_callees.append(full_callee_name)
             self.generic_visit(node)
 
     def enhance(self):
@@ -76,6 +72,7 @@ class GraphEnhancer:
             if not file_details: continue
             tree, import_map = file_details["tree"], file_details["imports"]
 
+            current_module_name = Path(filepath).stem
             target_func_name = function_name.split('.')[-1]
             node_to_visit = None
             for node in ast.walk(tree):
@@ -87,7 +84,7 @@ class GraphEnhancer:
                 params_with_types = {arg.arg: ast.unparse(arg.annotation).strip() for arg in node_to_visit.args.args if arg.annotation}
                 if not params_with_types: continue
                 
-                visitor = self.MethodCallVisitor(params_with_types, import_map)
+                visitor = self.MethodCallVisitor(params_with_types, import_map, current_module_name, self.root_package)
                 visitor.visit(node_to_visit)
 
                 if visitor.found_callees:
@@ -96,7 +93,7 @@ class GraphEnhancer:
                             data["callees"].append(callee)
         return self.graph
 
-# --- The rest of the script (helpers and main block) remains unchanged ---
+# --- The rest of the script is unchanged ---
 def save_as_dot_file(graph: dict, output_path: str):
     print(f"Generating DOT file...", file=sys.stderr)
     dot_lines = ['digraph CallGraph {', '  rankdir="LR";', '  node [shape=box, style=rounded, fontname="Helvetica"];', '  edge [fontname="Helvetica"];']
