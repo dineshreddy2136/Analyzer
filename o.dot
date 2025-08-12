@@ -1,14 +1,25 @@
 digraph CallGraph {
   rankdir="LR";
-  node [shape=box, style=rounded, fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", fontname="Helvetica"];
   edge [fontname="Helvetica"];
-  "src.database.ConnectionPool.cleanup_stale_connections" -> "datetime.timedelta";
-  "src.database.ConnectionPool.cleanup_stale_connections" -> "src.database.ConnectionPool.return_connection";
-  "src.database.ConnectionPool.cleanup_stale_connections" -> "datetime.datetime.now";
-  "src.database.ConnectionPool.cleanup_stale_connections" -> "append";
-  "src.database.ConnectionPool.cleanup_stale_connections" -> "<builtin>.len";
-  "src.database.ConnectionPool.return_connection" -> "append";
-  "src.database.ConnectionPool.return_connection" -> "remove";
-  "src.api.APIApplication.shutdown" -> "src.database.ConnectionPool.cleanup_stale_connections";
-  "src.utils.cleanup_application_resources" -> "src.database.ConnectionPool.cleanup_stale_connections";
+  "src.a.pd.DataFrame.drop" [label="src.a.pd.DataFrame.drop", fillcolor="#ffd6a5"];
+  "src.a.main" [label="src.a.main", fillcolor="#d1e0f9", tooltip=<def main():<br/>    &quot;&quot;&quot;<br/>    Main ETL logic wrapped in a function.<br/>    This function is called by AWS Glue and can also be called for local testing.<br/>    &quot;&quot;&quot;<br/>    # ==============================================================================<br/>    # 1. INITIALIZATION &amp; ARGUMENT PARSING<br/>    # ==============================================================================<br/>    # In AWS Glue, the real arguments are passed here.<br/>    # For local testing, mock arguments are passed from the __main__ block.<br/>    args = getResolvedOptions(sys.argv, [<br/>        &#39;JOB_NAME&#39;,<br/>        &#39;S3_INPUT_SALES_PATH&#39;,<br/>        &#39;S3_OUTPUT_PROCESSED_PATH&#39;,<br/>        &#39;S3_ERROR_PATH&#39;,<br/>        &#39;JDBC_CONNECTION_NAME&#39;<br/>    ])<br/><br/>    sc = SparkContext()<br/>    glueContext = GlueContext(sc)<br/>... (141 more lines)<br/>>];
+  "datetime.datetime.utcnow" [label="datetime.datetime.utcnow", fillcolor="#ffd6a5"];
+  "src.a.main.pandas_feature_engineering" [label="src.a.main.pandas_feature_engineering", fillcolor="#ffadad", tooltip=<def pandas_feature_engineering(df: pd.DataFrame) -&gt; pd.DataFrame:<br/>    df[&#39;customer_tenure_days&#39;] = (df[&#39;transaction_ts&#39;] - df[&#39;signup_ts&#39;]).dt.days<br/>    df[&#39;email_masked&#39;] = df[&#39;email&#39;].apply(mask_string)<br/>    df = df.drop(columns=[&#39;email&#39;, &#39;signup_ts&#39;])<br/>    df[&#39;processed_at&#39;] = datetime.utcnow()<br/>    return df<br/>>];
+  "<builtin>.isinstance" [label="<builtin>.isinstance", fillcolor="#fdffb6"];
+  "hashlib.sha256" [label="hashlib.sha256", fillcolor="#fdffb6"];
+  "src.a.pd.DataFrame.apply" [label="src.a.pd.DataFrame.apply", fillcolor="#ffd6a5"];
+  "datetime.utcnow" [label="datetime.utcnow", fillcolor="#ffd6a5"];
+  "src.a.str.encode" [label="src.a.str.encode", fillcolor="#fdffb6"];
+  "src.a.main.mask_string" [label="src.a.main.mask_string", fillcolor="#ffd6a5", tooltip=<def mask_string(value: str) -&gt; str:<br/>    if not isinstance(value, str):<br/>        return None<br/>    return hashlib.sha256(value.encode()).hexdigest()<br/>>];
+
+  "src.a.main.pandas_feature_engineering" -> "datetime.datetime.utcnow";
+  "src.a.main.pandas_feature_engineering" -> "src.a.pd.DataFrame.apply";
+  "src.a.main.pandas_feature_engineering" -> "src.a.main.mask_string";
+  "src.a.main.pandas_feature_engineering" -> "src.a.pd.DataFrame.drop";
+  "src.a.main.pandas_feature_engineering" -> "datetime.utcnow";
+  "src.a.main.mask_string" -> "hashlib.sha256";
+  "src.a.main.mask_string" -> "<builtin>.isinstance";
+  "src.a.main.mask_string" -> "src.a.str.encode";
+  "src.a.main" -> "src.a.main.pandas_feature_engineering";
 }

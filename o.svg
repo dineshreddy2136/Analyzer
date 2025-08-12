@@ -1,0 +1,115 @@
+<?xml version="1.0" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="539pt" height="231pt" viewBox="0.00 0.00 538.57 231.44">
+<g id="graph0" class="graph" transform="translate(107.2828049443367,161.331280450882) scale(0.5302186982938476)" data-name="CallGraph">
+
+<polygon fill="white" stroke="none" points="-4,4 -4,-227.44 534.57,-227.44 534.57,4 -4,4" style=""/>
+<!-- src.database.ConnectionPool.cleanup_stale_connections -->
+<g id="node1" class="node" pointer-events="visible" data-name="src.database.ConnectionPool.cleanup_stale_connections">
+
+<path fill="#d5f5e3" stroke="black" d="M227,-144C227,-144 160,-144 160,-144 154,-144 148,-138 148,-132 148,-132 148,-120 148,-120 148,-114 154,-108 160,-108 160,-108 227,-108 227,-108 233,-108 239,-114 239,-120 239,-120 239,-132 239,-132 239,-138 233,-144 227,-144" style=""/>
+<text text-anchor="middle" x="193.5" y="-122.31" font-family="Helvetica,sans-Serif" font-size="12.30" style="">src.database.ConnectionPool.cleanup_stale_connections</text>
+</g>
+<!-- append -->
+<g id="node2" class="node" pointer-events="visible" data-name="append">
+
+<path fill="lightgrey" stroke="black" d="M518.43,-194C518.43,-194 480,-194 480,-194 474,-194 468,-188 468,-182 468,-182 468,-170 468,-170 468,-164 474,-158 480,-158 480,-158 518.43,-158 518.43,-158 524.43,-158 530.43,-164 530.43,-170 530.43,-170 530.43,-182 530.43,-182 530.43,-188 524.43,-194 518.43,-194" style=""/>
+<text text-anchor="middle" x="499.21" y="-171.8" font-family="Helvetica,sans-Serif" font-size="14.00" style="">append</text>
+</g>
+<!-- src.database.ConnectionPool.cleanup_stale_connections&#45;&gt;append -->
+<g id="edge4" class="edge" data-name="src.database.ConnectionPool.cleanup_stale_connections-&gt;append">
+
+<path fill="none" stroke="black" d="M206.09,-144.31C219.79,-164.05 244.61,-194.36 275,-207 339.37,-233.78 363.8,-222.11 431.85,-207 440.5,-205.08 449.34,-201.91 457.65,-198.32" style=""/>
+<polygon fill="black" stroke="black" points="458.85,-201.62 466.44,-194.24 455.9,-195.27 458.85,-201.62" style=""/>
+</g>
+<!-- datetime.timedelta -->
+<g id="node3" class="node" pointer-events="visible" data-name="datetime.timedelta">
+
+<path fill="lightgrey" stroke="black" d="M406.82,-198C406.82,-198 300.03,-198 300.03,-198 294.03,-198 288.03,-192 288.03,-186 288.03,-186 288.03,-174 288.03,-174 288.03,-168 294.03,-162 300.03,-162 300.03,-162 406.82,-162 406.82,-162 412.82,-162 418.82,-168 418.82,-174 418.82,-174 418.82,-186 418.82,-186 418.82,-192 412.82,-198 406.82,-198" style=""/>
+<text text-anchor="middle" x="353.43" y="-175.8" font-family="Helvetica,sans-Serif" font-size="14.00" style="">datetime.timedelta</text>
+</g>
+<!-- src.database.ConnectionPool.cleanup_stale_connections&#45;&gt;datetime.timedelta -->
+<g id="edge1" class="edge" data-name="src.database.ConnectionPool.cleanup_stale_connections-&gt;datetime.timedelta">
+
+<path fill="none" stroke="black" d="M239.33,-141.33C254.44,-146.5 271.62,-152.37 287.94,-157.95" style=""/>
+<polygon fill="black" stroke="black" points="286.49,-161.15 297.08,-161.08 288.75,-154.53 286.49,-161.15" style=""/>
+</g>
+<!-- datetime.datetime.now -->
+<g id="node4" class="node" pointer-events="visible" data-name="datetime.datetime.now">
+
+<path fill="lightgrey" stroke="black" d="M419.78,-144C419.78,-144 287.07,-144 287.07,-144 281.07,-144 275.07,-138 275.07,-132 275.07,-132 275.07,-120 275.07,-120 275.07,-114 281.07,-108 287.07,-108 287.07,-108 419.78,-108 419.78,-108 425.78,-108 431.78,-114 431.78,-120 431.78,-120 431.78,-132 431.78,-132 431.78,-138 425.78,-144 419.78,-144" style=""/>
+<text text-anchor="middle" x="353.43" y="-121.8" font-family="Helvetica,sans-Serif" font-size="14.00" style="">datetime.datetime.now</text>
+</g>
+<!-- src.database.ConnectionPool.cleanup_stale_connections&#45;&gt;datetime.datetime.now -->
+<g id="edge3" class="edge" data-name="src.database.ConnectionPool.cleanup_stale_connections-&gt;datetime.datetime.now">
+
+<path fill="none" stroke="black" d="M239.33,-126C246.92,-126 255.03,-126 263.28,-126" style=""/>
+<polygon fill="black" stroke="black" points="263.09,-129.5 273.09,-126 263.09,-122.5 263.09,-129.5" style=""/>
+</g>
+<!-- src.database.ConnectionPool.return_connection -->
+<g id="node5" class="node" pointer-events="visible" data-name="src.database.ConnectionPool.return_connection">
+
+<path fill="#d5f5e3" stroke="black" d="M380.93,-90C380.93,-90 325.93,-90 325.93,-90 319.93,-90 313.93,-84 313.93,-78 313.93,-78 313.93,-66 313.93,-66 313.93,-60 319.93,-54 325.93,-54 325.93,-54 380.93,-54 380.93,-54 386.93,-54 392.93,-60 392.93,-66 392.93,-66 392.93,-78 392.93,-78 392.93,-84 386.93,-90 380.93,-90" style=""/>
+<text text-anchor="middle" x="353.43" y="-68.37" font-family="Helvetica,sans-Serif" font-size="12.10" style="">src.database.ConnectionPool.return_connection</text>
+</g>
+<!-- src.database.ConnectionPool.cleanup_stale_connections&#45;&gt;src.database.ConnectionPool.return_connection -->
+<g id="edge2" class="edge" data-name="src.database.ConnectionPool.cleanup_stale_connections-&gt;src.database.ConnectionPool.return_connection">
+
+<path fill="none" stroke="black" d="M239.33,-110.67C259.2,-103.88 282.63,-95.86 303,-88.9" style=""/>
+<polygon fill="black" stroke="black" points="303.89,-92.3 312.22,-85.75 301.63,-85.67 303.89,-92.3" style=""/>
+</g>
+<!-- &lt;builtin&gt;.len -->
+<g id="node6" class="node" pointer-events="visible" data-name="&lt;builtin&gt;.len">
+
+<path fill="lightgrey" stroke="black" d="M386.93,-36C386.93,-36 319.92,-36 319.92,-36 313.92,-36 307.92,-30 307.92,-24 307.92,-24 307.92,-12 307.92,-12 307.92,-6 313.92,0 319.92,0 319.92,0 386.93,0 386.93,0 392.93,0 398.93,-6 398.93,-12 398.93,-12 398.93,-24 398.93,-24 398.93,-30 392.93,-36 386.93,-36" style=""/>
+<text text-anchor="middle" x="353.43" y="-13.8" font-family="Helvetica,sans-Serif" font-size="14.00" style="">&lt;builtin&gt;.len</text>
+</g>
+<!-- src.database.ConnectionPool.cleanup_stale_connections&#45;&gt;&lt;builtin&gt;.len -->
+<g id="edge5" class="edge" data-name="src.database.ConnectionPool.cleanup_stale_connections-&gt;&lt;builtin&gt;.len">
+
+<path fill="none" stroke="black" d="M208.65,-107.5C223.42,-89.32 248.16,-61.9 275,-45 281.71,-40.77 289.17,-37.1 296.74,-33.96" style=""/>
+<polygon fill="black" stroke="black" points="297.94,-37.24 306.02,-30.39 295.43,-30.71 297.94,-37.24" style=""/>
+</g>
+<!-- src.database.ConnectionPool.return_connection&#45;&gt;append -->
+<g id="edge6" class="edge" data-name="src.database.ConnectionPool.return_connection-&gt;append">
+
+<path fill="none" stroke="black" d="M393.32,-81.19C406.27,-85.35 420.32,-91.15 431.85,-99 451.12,-112.11 468.17,-132.19 480.16,-148.56" style=""/>
+<polygon fill="black" stroke="black" points="477.11,-150.3 485.75,-156.45 482.83,-146.26 477.11,-150.3" style=""/>
+</g>
+<!-- remove -->
+<g id="node9" class="node" pointer-events="visible" data-name="remove">
+
+<path fill="lightgrey" stroke="black" d="M518.4,-90C518.4,-90 480.03,-90 480.03,-90 474.03,-90 468.03,-84 468.03,-78 468.03,-78 468.03,-66 468.03,-66 468.03,-60 474.03,-54 480.03,-54 480.03,-54 518.4,-54 518.4,-54 524.4,-54 530.4,-60 530.4,-66 530.4,-66 530.4,-78 530.4,-78 530.4,-84 524.4,-90 518.4,-90" style=""/>
+<text text-anchor="middle" x="499.21" y="-67.8" font-family="Helvetica,sans-Serif" font-size="14.00" style="">remove</text>
+</g>
+<!-- src.database.ConnectionPool.return_connection&#45;&gt;remove -->
+<g id="edge7" class="edge" data-name="src.database.ConnectionPool.return_connection-&gt;remove">
+
+<path fill="none" stroke="black" d="M393.34,-72C412.94,-72 436.73,-72 456.69,-72" style=""/>
+<polygon fill="black" stroke="black" points="456.42,-75.5 466.42,-72 456.42,-68.5 456.42,-75.5" style=""/>
+</g>
+<!-- src.api.APIApplication.shutdown -->
+<g id="node7" class="node" pointer-events="visible" data-name="src.api.APIApplication.shutdown">
+
+<path fill="#e6e6e6" stroke="#888888" d="M84.5,-171C84.5,-171 27.5,-171 27.5,-171 21.5,-171 15.5,-165 15.5,-159 15.5,-159 15.5,-147 15.5,-147 15.5,-141 21.5,-135 27.5,-135 27.5,-135 84.5,-135 84.5,-135 90.5,-135 96.5,-141 96.5,-147 96.5,-147 96.5,-159 96.5,-159 96.5,-165 90.5,-171 84.5,-171" style=""/>
+<text text-anchor="middle" x="56" y="-149.34" font-family="Helvetica,sans-Serif" font-size="12.20" fill="#888888" style="">src.api.APIApplication.shutdown</text>
+</g>
+<!-- src.api.APIApplication.shutdown&#45;&gt;src.database.ConnectionPool.cleanup_stale_connections -->
+<g id="edge8" class="edge" data-name="src.api.APIApplication.shutdown-&gt;src.database.ConnectionPool.cleanup_stale_connections">
+
+<path fill="none" stroke="black" d="M96.92,-145.05C109.36,-142.57 123.32,-139.78 136.64,-137.13" style=""/>
+<polygon fill="black" stroke="black" points="137.03,-140.62 146.15,-135.23 135.66,-133.76 137.03,-140.62" style=""/>
+</g>
+<!-- src.utils.cleanup_application_resources -->
+<g id="node8" class="node" pointer-events="visible" data-name="src.utils.cleanup_application_resources">
+
+<path fill="#e6e6e6" stroke="#888888" d="M100,-117C100,-117 12,-117 12,-117 6,-117 0,-111 0,-105 0,-105 0,-93 0,-93 0,-87 6,-81 12,-81 12,-81 100,-81 100,-81 106,-81 112,-87 112,-93 112,-93 112,-105 112,-105 112,-111 106,-117 100,-117" style=""/>
+<text text-anchor="middle" x="56" y="-95.19" font-family="Helvetica,sans-Serif" font-size="12.70" fill="#888888" style="">src.utils.cleanup_application_resources</text>
+</g>
+<!-- src.utils.cleanup_application_resources&#45;&gt;src.database.ConnectionPool.cleanup_stale_connections -->
+<g id="edge9" class="edge" data-name="src.utils.cleanup_application_resources-&gt;src.database.ConnectionPool.cleanup_stale_connections">
+
+<path fill="none" stroke="black" d="M112.11,-109.98C120.18,-111.59 128.5,-113.25 136.58,-114.86" style=""/>
+<polygon fill="black" stroke="black" points="135.83,-118.28 146.32,-116.8 137.2,-111.41 135.83,-118.28" style=""/>
+</g>
+</g>
+</svg>

@@ -3,3 +3,5 @@ python3 main.py src.utils.cleanup_application_resources --f --dot o.dot
 python3 main.py src.database.ConnectionPool.cleanup_stale_connections --full --dot o.dot
 
 python3 main.py src.utils.cleanup_application_resources --full --dot o.dot
+
+python3 main.py --file src/my_glue_job.py --f --dot glue_flow.dot
