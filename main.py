@@ -1,6 +1,7 @@
 # main.py
 import json
 import ast
+import os
 import sys
 import argparse
 import textwrap
@@ -8,6 +9,7 @@ from pathlib import Path
 import colorsys
 import hashlib
 from collections import deque
+from typing import Dict, List, Optional, Set, Any, Union
 
 # --- Configuration for Visualization ---
 MODULE_COLOR_MAP = {
@@ -15,6 +17,26 @@ MODULE_COLOR_MAP = {
     "awsglue": "#f5e1d4", "pyspark": "#fff2cc", "pandas": "#d1e0f9", "complex_glue_job": "#f5d4f2"
 }
 LEVEL_COLORS = ["#ffadad", "#ffd6a5", "#fdffb6", "#caffbf", "#9bf6ff", "#a0c4ff", "#bdb2ff", "#ffc6ff"]
+
+# --- Helper Classes ---
+class ImportVisitor(ast.NodeVisitor):
+    """Simple visitor to collect import information."""
+    
+    def __init__(self):
+        self.import_map = {}
+    
+    def visit_Import(self, node):
+        for alias in node.names:
+            name = alias.asname if alias.asname else alias.name
+            self.import_map[name] = alias.name
+        self.generic_visit(node)
+    
+    def visit_ImportFrom(self, node):
+        if node.module:
+            for alias in node.names:
+                name = alias.asname if alias.asname else alias.name
+                self.import_map[name] = f"{node.module}.{alias.name}"
+        self.generic_visit(node)
 
 # --- Configuration for Type Inference ---
 TYPE_INFERENCE_MAP = {
@@ -48,40 +70,65 @@ class GraphEnhancer:
             if '.' in first_key:
                 self.root_package = first_key.split('.')[0]
 
-    def get_file_details(self, filepath: str) -> dict:
+    def get_file_details(self, filepath: str) -> Optional[dict]:
         """
-        Parse a Python file and extract AST, imports, and source lines.
-        Results are cached for performance.
+        Get AST tree and import map for a Python file with comprehensive error handling.
+        
+        Args:
+            filepath: Path to Python file
+            
+        Returns:
+            Dictionary with 'tree' and 'imports' keys, or None if parsing fails
         """
-        if filepath not in self.file_cache:
-            try:
-                source_code = Path(filepath).read_text()
-                tree = ast.parse(source_code)
-                import_map = {}
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.ImportFrom) and node.module:
-                        module_name = node.module.lstrip('.') if node.level > 0 else node.module
-                        for alias in node.names:
-                            import_map[alias.name] = module_name
-                    elif isinstance(node, ast.Import):
-                        for alias in node.names:
-                            import_map[alias.name] = alias.name
-                self.file_cache[filepath] = {"tree": tree, "imports": import_map, "source_lines": source_code.splitlines()}
-            except Exception as e:
-                print(f"Warning: Failed to parse {filepath}: {e}", file=sys.stderr)
-                self.file_cache[filepath] = None
-        return self.file_cache[filepath]
+        if filepath in self.file_cache:
+            return self.file_cache[filepath]
+            
+        result = None
+        try:
+            if not os.path.exists(filepath):
+                print(f"⚠️  File not found: {filepath}", file=sys.stderr)
+                return None
+                
+            with open(filepath, 'r', encoding='utf-8') as file:
+                source_code = file.read()
+                
+            if not source_code.strip():
+                print(f"⚠️  Empty file: {filepath}", file=sys.stderr)
+                return None
+                
+            tree = ast.parse(source_code, filename=filepath)
+            import_visitor = ImportVisitor()
+            import_visitor.visit(tree)
+            
+            result = {
+                "tree": tree,
+                "imports": import_visitor.import_map
+            }
+            self.file_cache[filepath] = result
+            
+        except FileNotFoundError:
+            print(f"❌ File not found: {filepath}", file=sys.stderr)
+        except PermissionError:
+            print(f"❌ Permission denied reading: {filepath}", file=sys.stderr)
+        except UnicodeDecodeError as e:
+            print(f"❌ Encoding error in {filepath}: {e}", file=sys.stderr)
+        except SyntaxError as e:
+            print(f"❌ Syntax error in {filepath} at line {e.lineno}: {e.msg}", file=sys.stderr)
+        except Exception as e:
+            print(f"❌ Unexpected error parsing {filepath}: {e}", file=sys.stderr)
+            
+        return result
 
     class MethodCallVisitor(ast.NodeVisitor):
-        def __init__(self, import_map, current_module, root_package, graph=None):
+        def __init__(self, import_map: dict, current_module: str, root_package: str, graph: dict = None):
             self.import_map = import_map
             self.current_module = current_module
             self.root_package = root_package
-            self.found_callees = []
-            self.variable_types = {}
-            self.graph = graph or {}
+            self.found_callees: list = []
+            self.variable_types: dict = {}
+            self.graph: dict = graph or {}
             # Pre-compute function name lookups for performance (O(1) instead of O(n))
-            self._function_name_map = {}
+            self._function_name_map: dict = {}
             for func_name in self.graph.keys():
                 simple_name = func_name.split('.')[-1]
                 if simple_name not in self._function_name_map:
@@ -178,9 +225,9 @@ class GraphEnhancer:
                         call_parts = self._unroll_attribute(node.value.func)
                         if call_parts:
                             method_name = call_parts[-1]
-                            # Use configurable inference map
+                            # Use more precise pattern matching to avoid false positives
                             for pattern, inferred_type in TYPE_INFERENCE_MAP.items():
-                                if pattern in method_name:
+                                if method_name == pattern or method_name.startswith(f"{pattern}_"):
                                     self.variable_types[var_name] = inferred_type
                                     break
             self.generic_visit(node)
@@ -257,17 +304,21 @@ class GraphEnhancer:
         all_filepaths = {data['filepath'] for data in self.graph.values() if data.get('filepath')}
         for filepath in all_filepaths:
             file_details = self.get_file_details(filepath)
-            if not file_details: continue
+            if not file_details: 
+                continue
             module_name = f"{self.root_package}.{Path(filepath).stem}"
             newly_discovered_funcs = {}
             for node in file_details['tree'].body:
                 self.discover_functions(node, module_name, filepath, newly_discovered_funcs)
             self.graph.update(newly_discovered_funcs)
+        
         for function_name, data in self.graph.items():
             filepath = data.get("filepath")
-            if not filepath: continue
+            if not filepath: 
+                continue
             file_details = self.get_file_details(filepath)
-            if not file_details: continue
+            if not file_details: 
+                continue
             tree, import_map = file_details["tree"], file_details["imports"]
             current_module_name = Path(filepath).stem
             node_to_visit = find_function_node_in_ast(tree, function_name)
@@ -276,15 +327,73 @@ class GraphEnhancer:
                 visitor.visit(node_to_visit)
                 if visitor.found_callees:
                     data["callees"].extend(c for c in visitor.found_callees if c not in data["callees"])
+        
+        # Build reverse graph for efficient backward traces
+        self._reverse_graph = {}
+        for caller, data in self.graph.items():
+            for callee in data.get("callees", []):
+                if callee not in self._reverse_graph:
+                    self._reverse_graph[callee] = []
+                if caller not in self._reverse_graph[callee]:
+                    self._reverse_graph[callee].append(caller)
+        
         return self.graph
 
 # --- Helper Functions ---
-def find_function_node_in_ast(tree, full_function_name):
+def find_function_node_in_ast(tree: ast.AST, full_function_name: str) -> ast.FunctionDef:
+    """
+    Find a function node in AST with hierarchical path matching to avoid name collisions.
+    
+    Args:
+        tree: The AST tree to search
+        full_function_name: Fully qualified function name (e.g., 'src.module.Class.method')
+    
+    Returns:
+        The matching function node or None
+    """
     parts = full_function_name.split('.')
     target_name = parts[-1]
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == target_name:
-            return node
+    
+    # For simple cases, use the original fast approach
+    if len(parts) <= 2:
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == target_name:
+                return node
+        return None
+    
+    # For complex nested functions, build a path context
+    def find_with_context(node: ast.AST, current_path: list) -> ast.FunctionDef:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            node_path = current_path + [node.name]
+            # Check if this path matches the target (allowing partial matches for nested functions)
+            if node.name == target_name and len(node_path) >= 2:
+                # Verify the path context matches
+                target_suffix = parts[-len(node_path):]
+                if target_suffix == node_path:
+                    return node
+            
+            # Recurse into nested functions
+            for child in ast.iter_child_nodes(node):
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    result = find_with_context(child, node_path)
+                    if result:
+                        return result
+        
+        elif isinstance(node, ast.ClassDef):
+            # Recurse into class methods
+            for child in ast.iter_child_nodes(node):
+                result = find_with_context(child, current_path + [node.name])
+                if result:
+                    return result
+        
+        return None
+    
+    # Start search from module level
+    for node in tree.body:
+        result = find_with_context(node, [])
+        if result:
+            return result
+    
     return None
 
 def escape_dot_label(text: str) -> str:
@@ -380,30 +489,79 @@ def save_as_dot_file(graph: dict, full_graph: dict, file_cache: dict, output_pat
 def get_deep_forward_trace(graph: dict, start_function: str, max_depth: int = None) -> dict:
     """
     Get a deep forward trace of all functions called by start_function.
-    Uses efficient queue operations for better performance.
+    Uses efficient queue operations with memoization for better performance.
     
     Args:
         graph: The function call graph
         start_function: Starting function name
         max_depth: Maximum recursion depth (None for unlimited)
     """
+    # Cache for repeated callee lookups
+    _callee_cache = {}
+    
+    def get_callees_cached(func):
+        if func not in _callee_cache:
+            node_data = graph.get(func)
+            _callee_cache[func] = node_data.get("callees", []) if node_data else []
+        return _callee_cache[func]
+    
     dependency_tree = {}
     to_visit = deque([(start_function, 0)])  # Include depth tracking
     visited = set()
+    
     while to_visit:
         current_function, depth = to_visit.popleft()
         if current_function in visited: 
             continue
         if max_depth is not None and depth >= max_depth:
             continue
+            
         visited.add(current_function)
-        node_data = graph.get(current_function)
-        if node_data:
-            direct_callees = node_data.get("callees", [])
-            dependency_tree[current_function] = direct_callees
-            for callee in direct_callees:
-                if callee not in visited:
-                    to_visit.append((callee, depth + 1))
+        direct_callees = get_callees_cached(current_function)
+        dependency_tree[current_function] = direct_callees
+        
+        for callee in direct_callees:
+            if callee not in visited:
+                to_visit.append((callee, depth + 1))
+                
+    return dependency_tree
+
+def get_deep_backward_trace(enhancer: 'GraphEnhancer', start_function: str, max_depth: int = None) -> dict:
+    """
+    Get a deep backward trace of all functions that call start_function.
+    Uses the reverse graph for O(1) caller lookups.
+    
+    Args:
+        enhancer: GraphEnhancer instance with built reverse graph
+        start_function: Starting function name
+        max_depth: Maximum recursion depth (None for unlimited)
+        
+    Returns:
+        Dictionary mapping functions to their callers
+    """
+    if not hasattr(enhancer, '_reverse_graph'):
+        return {}
+        
+    reverse_graph = enhancer._reverse_graph
+    dependency_tree = {}
+    to_visit = deque([(start_function, 0)])
+    visited = set()
+    
+    while to_visit:
+        current_function, depth = to_visit.popleft()
+        if current_function in visited:
+            continue
+        if max_depth is not None and depth >= max_depth:
+            continue
+            
+        visited.add(current_function)
+        direct_callers = reverse_graph.get(current_function, [])
+        dependency_tree[current_function] = direct_callers
+        
+        for caller in direct_callers:
+            if caller not in visited:
+                to_visit.append((caller, depth + 1))
+                
     return dependency_tree
 
 def get_backward_trace(graph: dict, target_function: str) -> list:
