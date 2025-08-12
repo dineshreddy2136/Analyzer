@@ -5,11 +5,15 @@ import os
 import sys
 import argparse
 import textwrap
+import logging
 from pathlib import Path
 import colorsys
 import hashlib
 from collections import deque
 from typing import Dict, List, Optional, Set, Any, Union
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # --- Configuration for Visualization ---
 MODULE_COLOR_MAP = {
@@ -20,22 +24,42 @@ LEVEL_COLORS = ["#ffadad", "#ffd6a5", "#fdffb6", "#caffbf", "#9bf6ff", "#a0c4ff"
 
 # --- Helper Classes ---
 class ImportVisitor(ast.NodeVisitor):
-    """Simple visitor to collect import information."""
+    """
+    AST visitor to collect import information with support for relative imports.
     
-    def __init__(self):
+    Returns:
+        import_map: Dict[str, str] mapping local names to fully qualified names
+    """
+    
+    def __init__(self, module_path: str = ""):
         self.import_map = {}
+        self.module_path = module_path  # For resolving relative imports
     
     def visit_Import(self, node):
+        """Handle 'import module' and 'import module as alias'."""
         for alias in node.names:
             name = alias.asname if alias.asname else alias.name
             self.import_map[name] = alias.name
         self.generic_visit(node)
     
     def visit_ImportFrom(self, node):
+        """Handle 'from module import name' with relative import support."""
         if node.module:
+            # Handle relative imports (e.g., from ..module import x)
+            if node.level > 0:  # Relative import
+                base_parts = self.module_path.split('.')[:-node.level] if self.module_path else []
+                if base_parts and node.module:
+                    resolved_module = '.'.join(base_parts + [node.module])
+                elif base_parts:
+                    resolved_module = '.'.join(base_parts)
+                else:
+                    resolved_module = node.module or ""
+            else:
+                resolved_module = node.module
+                
             for alias in node.names:
                 name = alias.asname if alias.asname else alias.name
-                self.import_map[name] = f"{node.module}.{alias.name}"
+                self.import_map[name] = f"{resolved_module}.{alias.name}"
         self.generic_visit(node)
 
 # --- Configuration for Type Inference ---
@@ -97,7 +121,12 @@ class GraphEnhancer:
                 return None
                 
             tree = ast.parse(source_code, filename=filepath)
-            import_visitor = ImportVisitor()
+            
+            # Extract module path for relative import resolution
+            module_path = str(Path(filepath).relative_to(Path.cwd()).with_suffix(''))
+            module_path = module_path.replace('/', '.')
+            
+            import_visitor = ImportVisitor(module_path)
             import_visitor.visit(tree)
             
             result = {
@@ -107,15 +136,15 @@ class GraphEnhancer:
             self.file_cache[filepath] = result
             
         except FileNotFoundError:
-            print(f"❌ File not found: {filepath}", file=sys.stderr)
+            logging.error(f"File not found: {filepath}")
         except PermissionError:
-            print(f"❌ Permission denied reading: {filepath}", file=sys.stderr)
+            logging.error(f"Permission denied reading: {filepath}")
         except UnicodeDecodeError as e:
-            print(f"❌ Encoding error in {filepath}: {e}", file=sys.stderr)
+            logging.error(f"Encoding error in {filepath}: {e}")
         except SyntaxError as e:
-            print(f"❌ Syntax error in {filepath} at line {e.lineno}: {e.msg}", file=sys.stderr)
+            logging.error(f"Syntax error in {filepath} at line {e.lineno}: {e.msg}")
         except Exception as e:
-            print(f"❌ Unexpected error parsing {filepath}: {e}", file=sys.stderr)
+            logging.error(f"Unexpected error parsing {filepath}: {e}")
             
         return result
 
@@ -540,6 +569,7 @@ def get_deep_backward_trace(enhancer: 'GraphEnhancer', start_function: str, max_
         Dictionary mapping functions to their callers
     """
     if not hasattr(enhancer, '_reverse_graph'):
+        print("⚠️  Warning: Reverse graph not built. Run enhance() first.", file=sys.stderr)
         return {}
         
     reverse_graph = enhancer._reverse_graph
@@ -593,7 +623,15 @@ Examples:
     report_group.add_argument("--b", "--backward", action="store_true", help="Show backward dependency tracking only.")
     report_group.add_argument("--full", action="store_true", help="Show both forward and backward tracking (default).")
     parser.add_argument("--max-depth", type=int, help="Maximum recursion depth for dependency tracing (prevents runaway analysis)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging output")
+    
     args = parser.parse_args()
+    
+    # Configure logging based on verbosity
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.WARNING)
     
     enhancer = GraphEnhancer("src/.nuanced/nuanced-graph.json")
     enhanced_graph = enhancer.enhance()
@@ -656,7 +694,7 @@ Examples:
     if is_forward_only or is_full_report:
         final_report["forward_dependency_tree"] = get_deep_forward_trace(enhanced_graph, start_node, args.max_depth)
     if is_backward_only or is_full_report:
-        final_report["backward_tracking_callers"] = get_backward_trace(enhanced_graph, start_node)
+        final_report["backward_tracking_callers"] = get_deep_backward_trace(enhancer, start_node, args.max_depth)
     
     # Sort keys for consistent output
     print(json.dumps(final_report, indent=2, sort_keys=True))
